@@ -167,7 +167,9 @@ def replace_strings(filename, overwrite=False, force=False, accept=[]):
                 full_text_lines.append(string)
             else:
                 # split out the leading whitespace and trailing
-                leading_whitespace, message, trailing_whitespace = split_trailing_space(string)
+                leading_whitespace, message, trailing_whitespace = split_trailing_space(
+                    string
+                )
                 full_text_lines.append(leading_whitespace)
 
                 # Find location of first letter
@@ -178,12 +180,16 @@ def replace_strings(filename, overwrite=False, force=False, accept=[]):
                 elif lineno in ignore_lines:
                     full_text_lines.append(message)
                 elif force:
-                    full_text_lines.append('{% translate "' + message.replace('"', '\\"') + '" %}')
+                    full_text_lines.append(
+                        '{% translate "' + message.replace('"', '\\"') + '" %}'
+                    )
 
                 else:
                     change = input("Make %r translatable? [Y/n] " % message)
                     if change == "y" or change == "":
-                        full_text_lines.append('{% translate "' + message.replace('"', '\\"') + '" %}')
+                        full_text_lines.append(
+                            '{% translate "' + message.replace('"', '\\"') + '" %}'
+                        )
                     else:
                         full_text_lines.append(message)
 
@@ -252,7 +258,8 @@ def filenames_to_work_on(directory, exclude_filenames):
         files.extend(
             os.path.join(dirpath, fname)
             for fname in filenames
-            if (fname.endswith(".html") or fname.endswith(".txt")) and fname not in exclude_filenames
+            if (fname.endswith(".html") or fname.endswith(".txt"))
+            and fname not in exclude_filenames
         )
     return files
 
@@ -318,7 +325,9 @@ def main():
 
     for filename in files:
         if options.replace:
-            replace_strings(filename, overwrite=True, force=options.force, accept=accept_regexes)
+            replace_strings(
+                filename, overwrite=True, force=options.force, accept=accept_regexes
+            )
         else:
             print_strings(filename, accept=accept_regexes)
 
