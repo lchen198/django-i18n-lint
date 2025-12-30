@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 """
-Prints out all
+This script checks Django HTML templates for strings that are not marked for translation
 """
 
 import os
@@ -49,10 +49,10 @@ GOOD_STRINGS = re.compile(
         |<script.*?</script>
 
          # A html title or value attribute that's been translated
-        |(?:value|title|summary|alt)="{%\ ?trans.*?%}"
+        |(?<![a-z0-9-_:])(?:title|summary|alt)="{%\ ?trans.*?%}"
 
          # A html title or value attribute that's just a template var
-        |(?:value|title|summary|alt)="{{.*?}}"
+        |(?<![a-z0-9-_:])(?:title|summary|alt)="{{.*?}}"
 
          # An <option> value tag
         |<option[^<>]+?value="[^"]*?"
@@ -60,14 +60,21 @@ GOOD_STRINGS = re.compile(
          # Any html attribute that's not value or title (single quote, double quote and html5 quoteless)
          # NB at the start we want to grab any trailing quote from the previous attribute
          # FIXME This will fail for some quoteless attr values.
-        |(?:['"]\W+)?[a-z:-]+?(?<!alt)(?<!value)(?<!title)(?<!summary)=(?:'(?:{{.*?}}|{%.*?%}|[^']*)'|"(?:{{.*?}}|{%.*?%}|[^"]*)+"|[a-zA-Z\.]+)
+        |(?:['"]\W+)?(?!alt=|title=|summary=)[@a-z0-9:.-]+?=(?:'(?:{{.*?}}|{%.*?%}|[^']*)'|"(?:{{.*?}}|{%.*?%}|[^"]*)+"|[a-zA-Z\.]+)
 
          # The actual alt/value/title tag itself cannot be translated, but the value should be
          # Treat data-title/data-original-title etc as equivalanets. Think this is some bootstrap thing & HTML5
-        |(?:['"]\W+)?(?:data-|data-original-)?(?:alt|value|title|summary)=['"]?
+        |(?:['"]\W+)?(?<![a-z0-9-_:])(?:data-|data-original-)?(?:alt|title|summary)=['"]?
 
-         # Boolean attributes
-        |<[^<>]+?(?:checked|selected|disabled|readonly|multiple|ismap|defer|async|declare|noresize|nowrap|noshade|compact|hidden|itemscope|autofocus|autoplay|controls|download)[^<>]*?>
+         # Boolean attributes (standalone, not requiring a value)
+         # HTML5 boolean attributes
+        |(?:checked|selected|disabled|readonly|multiple|ismap|defer|async|declare|noresize|nowrap|noshade|compact|hidden|itemscope|autofocus|autoplay|controls|download|novalidate|required|loop|muted|playsinline|open|reversed|default|formnovalidate|inert|nomodule|allowfullscreen|allowpaymentrequest|truespeed|seamless|sortable|translate|draggable|spellcheck|contenteditable)(?=\s*>|\s*/>|\s+[a-z])
+
+         # HTMX boolean attributes (ws-send, hx-preserve, hx-disable, etc.)
+        |(?:ws-send|hx-preserve|hx-disable|hx-history-elt|hx-disinherit|sse-connect|sse-swap)(?=\s*>|\s*/>|\s+[a-z])
+
+         # Alpine.js boolean attributes
+        |(?:x-cloak|x-ignore|x-transition)(?=\s*>|\s*/>|\s+[a-z])
 
          # HTML opening tag
         |<[\w:]+
@@ -120,8 +127,7 @@ LEADING_TRAILING_WHITESPACE = re.compile(r"(^\W+|\W+$)")
 
 
 def split_into_good_and_bad(template):
-    for index, match in enumerate(GOOD_STRINGS.split(template)):
-        yield (index, match)
+    yield from enumerate(GOOD_STRINGS.split(template))
 
 
 def split_trailing_space(string):
@@ -140,7 +146,7 @@ def split_trailing_space(string):
         # leading and trailing whitespace
         return (results[1], results[2], results[3])
     else:
-        raise NotImplementedError("Unknown case: %r %r" % (string, results))
+        raise NotImplementedError(f"Unknown case: {string!r} {results!r}")
 
 
 def replace_strings(filename, overwrite=False, force=False, accept=[]):
@@ -161,9 +167,7 @@ def replace_strings(filename, overwrite=False, force=False, accept=[]):
                 full_text_lines.append(string)
             else:
                 # split out the leading whitespace and trailing
-                leading_whitespace, message, trailing_whitespace = split_trailing_space(
-                    string
-                )
+                leading_whitespace, message, trailing_whitespace = split_trailing_space(string)
                 full_text_lines.append(leading_whitespace)
 
                 # Find location of first letter
@@ -174,16 +178,12 @@ def replace_strings(filename, overwrite=False, force=False, accept=[]):
                 elif lineno in ignore_lines:
                     full_text_lines.append(message)
                 elif force:
-                    full_text_lines.append(
-                        '{% translate "' + message.replace('"', '\\"') + '" %}'
-                    )
+                    full_text_lines.append('{% translate "' + message.replace('"', '\\"') + '" %}')
 
                 else:
                     change = input("Make %r translatable? [Y/n] " % message)
                     if change == "y" or change == "":
-                        full_text_lines.append(
-                            '{% translate "' + message.replace('"', '\\"') + '" %}'
-                        )
+                        full_text_lines.append('{% translate "' + message.replace('"', '\\"') + '" %}')
                     else:
                         full_text_lines.append(message)
 
@@ -242,7 +242,7 @@ def print_strings(filename, accept=[]):
         if any(r.match(message) for r in accept):
             continue
 
-        print("%s:%s:%s:%s" % (filename, lineno, charpos, message))
+        print(f"{filename}:{lineno}:{charpos}:{message}")
 
 
 def filenames_to_work_on(directory, exclude_filenames):
@@ -252,8 +252,7 @@ def filenames_to_work_on(directory, exclude_filenames):
         files.extend(
             os.path.join(dirpath, fname)
             for fname in filenames
-            if (fname.endswith(".html") or fname.endswith(".txt"))
-            and fname not in exclude_filenames
+            if (fname.endswith(".html") or fname.endswith(".txt")) and fname not in exclude_filenames
         )
     return files
 
@@ -319,9 +318,7 @@ def main():
 
     for filename in files:
         if options.replace:
-            replace_strings(
-                filename, overwrite=True, force=options.force, accept=accept_regexes
-            )
+            replace_strings(filename, overwrite=True, force=options.force, accept=accept_regexes)
         else:
             print_strings(filename, accept=accept_regexes)
 
